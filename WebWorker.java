@@ -1,4 +1,5 @@
 import java.net.Socket;
+import java.nio.file.Files;
 import java.lang.Runnable;
 import java.io.*;
 import java.util.Date;
@@ -11,13 +12,18 @@ public class WebWorker implements Runnable
 
 	private Socket socket;
 	private File workable; // stores the desired file
+	private String fileType = "";
 	private boolean fileFound;
 	private boolean fileCreated;
-	//I use fileFound as a boolean to decide whether or not the "My server works!" header will be presented
-	//fileCreated is used to decide whether or not the body will be read from a file
-	//If fileFound is false, the 404 error is thrown. If fileFound is true and fileCreated is true,
-	//A file is read from to create the body. If fileFound is true and fileCreated is false, only the header
-	//"My server works!" appears.
+	// I use fileFound as a boolean to decide whether or not the "My server
+	// works!" header will be presented
+	// fileCreated is used to decide whether or not the body will be read from a
+	// file
+	// If fileFound is false, the 404 error is thrown. If fileFound is true and
+	// fileCreated is true,
+	// A file is read from to create the body. If fileFound is true and
+	// fileCreated is false, only the header
+	// "My server works!" appears.
 
 	/**
 	 * Constructor: must have a valid open socket
@@ -40,7 +46,7 @@ public class WebWorker implements Runnable
 			InputStream is = socket.getInputStream();
 			OutputStream os = socket.getOutputStream();
 			readHTTPRequest(is);
-			writeHTTPHeader(os, "text/html");
+			writeHTTPHeader(os, fileType);
 			writeContent(os);
 			os.flush();
 			socket.close();
@@ -69,14 +75,23 @@ public class WebWorker implements Runnable
 					Thread.sleep(1);
 				line = r.readLine();
 				System.out.println("Request line: (" + line + ")");
-				
+
 				if (line.contains("GET") && (line.length() > 14))
 				{
 					fileFound = false;
 					workable = new File(line.substring(5, line.length() - 9));
-					if(workable.exists())
+					if (workable.exists())
 						fileFound = true;
 					fileCreated = true;
+					if (line.contains(".txt") | line.contains(".html"))
+						fileType = "text/html";
+					else if (line.contains(".png"))
+						fileType = "image/png";
+					else if (line.contains(".jpg") || line.contains(".jpeg"))
+						fileType = "image/jpeg";
+					else if (line.contains(".gif"))
+						fileType = "image/gif";
+					System.out.println(fileType);
 				}
 				if (line.contains("GET") && (line.length() == 14))
 				{
@@ -137,23 +152,39 @@ public class WebWorker implements Runnable
 	{
 		if (fileFound)
 		{
-			os.write("<html><head></head><body>\n".getBytes());
-			os.write("<h3>My web server works!</h3>\n".getBytes());
-			os.write("<p>".getBytes());
-			
 			if (fileCreated)
 			{
 				Scanner sc = new Scanner(workable);
-				while (sc.hasNextLine()) // runs each line through the
-											// editString method
+				if (fileType.equals("text/html"))
 				{
-					String temp = sc.nextLine();
-					temp = editString(temp);
-					os.write(temp.getBytes());
+					os.write("<html><head></head><body>\n".getBytes());
+					os.write("<h3>My web server works!</h3>\n".getBytes());
+					os.write("<p>".getBytes());
+					while (sc.hasNextLine()) // runs each line through the
+					// editString method
+					{
+						String temp = sc.nextLine();
+						temp = editString(temp);
+						os.write(temp.getBytes());
+					}
+					os.write("</p>".getBytes());
+					os.write("</body></html>\n".getBytes());
+					sc.close();
 				}
-				os.write("</p>".getBytes());
-				os.write("</body></html>\n".getBytes());
-				sc.close();
+				if(fileType.contains("image"))
+				{
+					byte picture[] = Files.readAllBytes(workable.toPath());
+					for(int x = 0; x < picture.length; x++)
+					{
+						os.write(picture[x]);
+					}
+				}
+			}
+			else
+			{
+				os.write("<html><head></head><body>\n".getBytes());
+				os.write("<h3>My web server works!</h3>\n".getBytes());
+				os.write("<p>".getBytes());
 			}
 		}
 		else
